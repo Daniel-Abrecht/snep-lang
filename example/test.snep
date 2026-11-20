@@ -1,0 +1,27 @@
+
+coroutine_a_state = {
+  continue = ? as (routine coroutine_a_state rw*)*;
+  index = ? as i64;
+  max = ? as i64;
+};
+
+coroutine_a = (routine coroutine_a_state rw*) {
+  while(index. < max.){
+    continue = next&;
+    return;
+  next:
+    index = index. + 1;
+  }
+  continue = 0;
+};
+
+main = ({}<={}) {
+  local co = coroutine_a_state {
+    continue = coroutine_a&;
+    max = 10;
+  }&;
+  while(co.continue){
+    co.continue.();
+    print(co.index);
+  }
+}

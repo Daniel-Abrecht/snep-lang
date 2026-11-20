@@ -1,0 +1,232 @@
+#ifndef AST_H
+#define AST_H
+
+
+#include <stddef.h>
+#include <stdbool.h>
+#include <gmp.h>
+#include <dpa/utils/list.h>
+#include <dpa/utils/bo.h>
+
+#define abstract
+#define related
+
+#define AST_is(VALUE, TYPE) ((VALUE) >= AST_S_##TYPE && (VALUE) <= AST_E_##TYPE)
+
+
+typedef struct AST_M_child AST_M_child;
+typedef struct AST_M_type AST_M_type;
+typedef struct AST_IT AST_IT;
+
+struct AST_M_child {
+  const char* name;
+  int offset;
+  int count;
+  bool is_list;
+};
+
+struct AST_M_type {
+  const char* name;
+  const struct AST_M_child* children;
+  int children_count;
+  int size; // sizeof(AST_*)
+};
+
+
+BEGIN AST
+
+
+abstract struct AST_AST {
+  enum AST_node_type type;
+  related AST_AST* parent;
+};
+
+
+////// Statement //////
+
+abstract struct AST_statement {
+  AST_AST ast;
+};
+
+struct AST_statement_expression {
+  AST_AST ast;
+  struct AST_expression* expression;
+};
+
+struct AST_declaration { // Note: also used for definitions. Definitions have a value.
+  AST_statement statement;
+  dpa_u_a_bo_unique_t name;
+  // struct scope_entry entry;
+  AST_expression* expression;
+};
+
+
+////// Blocks //////
+
+abstract struct AST_block {
+  AST_AST ast;
+};
+
+struct AST_block_unknown {
+  AST_block block;
+  dpa_u_list(struct token*) token_list;
+};
+
+abstract struct AST_block_declarative {
+  AST_block block;
+  dpa_u_list(AST_statement*) declarations;
+  // scope scope;
+};
+
+struct AST_block_module {
+  AST_block_declarative block_declarative;
+};
+
+struct AST_block_code {
+  AST_block block;
+  dpa_u_list(AST_statement*) statement;
+  bool is_stackful;
+};
+
+struct AST_block_dataflow {
+  AST_block block;
+};
+
+struct AST_block_struct_type {
+  AST_block_declarative block_declarative;
+};
+
+struct AST_block_struct_value {
+  AST_block block;
+};
+
+
+////// Expression //////
+
+abstract struct AST_expression {
+  AST_AST ast;
+  union {
+    int precedence; // Only used when constructing the AST
+  };
+};
+
+struct AST_named_constant {
+  AST_expression expression;
+  dpa_u_a_bo_unique_t name;
+};
+
+struct AST_struct_type {
+  AST_expression expression;
+  AST_block_struct_type* block;
+};
+
+struct AST_struct_value {
+  AST_expression expression;
+  AST_block_struct_value* block;
+};
+
+struct AST_string_value {
+  AST_expression expression;
+  dpa_u_a_bo_unique_t value;
+};
+
+struct AST_integer_value {
+  AST_expression expression;
+  mpz_t value;
+};
+
+////// Operation //////
+
+abstract struct AST_operator {
+  AST_expression expression;
+};
+
+abstract struct AST_operator_unary {
+  AST_operator operator;
+  AST_expression* input;
+};
+
+struct AST_op_copy { AST_operator_unary operator_unary; };
+struct AST_op_deref { AST_operator_unary operator_unary; };
+struct AST_op_ref { AST_operator_unary operator_unary; }; // Only applicable to types
+struct AST_op_meta { AST_operator_unary operator_unary; };
+struct AST_op_negate { AST_operator_unary operator_unary; };
+struct AST_op_invert { AST_operator_unary operator_unary; };
+struct AST_op_not { AST_operator_unary operator_unary; };
+
+struct AST_operator_binary {
+  AST_operator operator;
+  AST_expression* input[2];
+};
+
+struct AST_op_member { AST_operator_binary operator_binary; };
+struct AST_op_cast { AST_operator_binary operator_binary; };
+abstract struct AST_op_assignment { AST_operator_binary operator_binary; };
+struct AST_op_assignment_normal { AST_op_assignment assignment; }; // Has verry low precedence
+struct AST_op_assignment_inline { AST_op_assignment assignment; }; // Has higher precedence
+struct AST_op_subscript { AST_operator_binary operator_binary; };
+struct AST_op_minus { AST_operator_binary operator_binary; };
+struct AST_op_plus { AST_operator_binary operator_binary; };
+struct AST_op_multiply { AST_operator_binary operator_binary; };
+struct AST_op_divide { AST_operator_binary operator_binary; };
+struct AST_op_reminder { AST_operator_binary operator_binary; };
+struct AST_op_divide_reminder { AST_operator_binary operator_binary; };
+struct AST_op_power { AST_operator_binary operator_binary; };
+struct AST_op_bitshift_left { AST_operator_binary operator_binary; };
+struct AST_op_bitshift_right { AST_operator_binary operator_binary; };
+struct AST_op_binary_and { AST_operator_binary operator_binary; };
+struct AST_op_binary_or { AST_operator_binary operator_binary; };
+struct AST_op_binary_xor { AST_operator_binary operator_binary; };
+struct AST_op_logic_and { AST_operator_binary operator_binary; };
+struct AST_op_logic_or { AST_operator_binary operator_binary; };
+struct AST_op_equal { AST_operator_binary operator_binary; };
+struct AST_op_not_equal { AST_operator_binary operator_binary; };
+struct AST_op_less_than { AST_operator_binary operator_binary; };
+struct AST_op_less_than_equal { AST_operator_binary operator_binary; };
+struct AST_op_greater_than { AST_operator_binary operator_binary; };
+struct AST_op_greater_than_equal { AST_operator_binary operator_binary; };
+
+struct AST_incomplete_expression_application {
+  // For "type type (value)", we have cast(type,cast(type,value))
+  // but for "function (function) (value)", we have call(call(function),value)
+  // This can only be resolved after the type category of the resulting values is known
+  AST_expression expression;
+  dpa_u_list(AST_expression*) children;
+};
+
+struct AST_incomplete_member_or_deref_cast {
+  // An expression a.b.c can be a member(member(a,b),c) or a cast(deref(a),cast(deref(b),c)).
+  // Because these differ in structure, but we still need to reason about the final type which may be part of
+  // a recursive type, we temporarely put it here, and resolve this laterr once we know enough about the types
+  // of the identifiers involved.
+  // The leftmost expression it applies to is expression.input, for example: "a.b.c -> a" or "f().b.c -> f()"
+  AST_operator_unary operator_unary;
+  dpa_u_list(struct token*) children; // The remaining . and unresolved identifier tokens.
+};
+
+// Helper nodes, used when constructing the AST.
+struct AST_expr_terminator { AST_expression expression; };
+struct AST_op_nothing { AST_operator_unary operator_unary; };
+
+
+END AST
+
+
+typedef struct AST_IT AST_IT;
+struct AST_IT {
+  const AST_AST* ast;
+  AST_AST **node, **end;
+  int child;
+};
+
+bool AST_IT_next(AST_IT*restrict ast, bool skip_null);
+
+void print_ast_tree(const AST_AST* ast, int indent);
+void print_ast_node(const AST_AST* ast, int indent);
+
+extern const struct AST_M_type ast_type_meta[];
+
+
+#undef related
+#undef abstract
+#endif

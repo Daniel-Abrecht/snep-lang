@@ -1,0 +1,5 @@
+
+example_function_type = routine {param = ? as string;} stack {param = ? as string;};
+same_function_type = ({param = ? as string;} <= {param = ? as string;});
+
+assert(example_function_type == same_function_type);

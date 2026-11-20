@@ -1,0 +1,29 @@
+
+// This is a comment
+/* 
+This is also a comment
+*/
+
+inline list = (type <= {T=type ?; M=modifier ?}) {
+  return {
+    data  = ? as T[count] M*;
+    count = ? as size_t;
+  };
+};
+
+bytes = list(u8);
+string = derived bytes; // strings can be assigned to bytes, but bytes can't be assigned to string.
+
+namespace io {
+  extern puts = ? as (int <= bytes);
+};
+
+main = (int <= {args = ? as list(bytes)}) {
+  io.puts("Example program. The following arguments were passed:"&);
+  for(local i=0&; i. < args.count; i=i.+1){ // .= is a distinct operator, it's not dereference then assign, it's assign to pointer target
+    io.puts("\n * "&);
+    io.puts(args.data[i].);
+  }
+  io.puts("\n"&);
+  return 0;
+};
