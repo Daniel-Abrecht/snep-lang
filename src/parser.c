@@ -87,9 +87,10 @@ const struct operator_parser_meta_list opmeta[] = {
     // node when what the identifiers refer to has been resolved. Crucially, the structure of the resulting tree is
     // very different depending on what the constituents turn out to be, which is why we can't break it don wurrther at
     // this point.
-    .count = 1,
+    .count = 2,
     .list = (const struct operator_parser_meta[]){
       {{0x0100,0x0000}, AST_T_incomplete_member_or_deref_cast},
+      {{0x0100,0x0000}, AST_T_op_deref},
     },
   },
   [TOKEN_OP_DEFINE] = { // =
@@ -377,9 +378,33 @@ AST_expression* parse_expression(struct token** start, struct token** end){
               top = &terminator.expression;
               top->ast.parent = &op->expression.ast;
             }else if(meta->precedence[0]){ // suffix operator
+              if(AST_is(op->expression.ast.type, incomplete_member_or_deref_cast)){
+                if(t<end-1 && t[1]->type == TOKEN_IDENTIFIER){
+                  for(; t<end-1; t+=2){
+                    if(t[0]->type == TOKEN_OPERATOR && ((struct token_string*)t[0])->id == TOKEN_OP_DOT && t[1]->type == TOKEN_IDENTIFIER){
+                      AST_incomplete_member_or_deref_cast* n = dpa_u_container_of(op, AST_incomplete_member_or_deref_cast, operator_unary.operator);
+                      dpa_u_list_append(&n->children, 1, (struct token_string**)(t+1));
+                    }else break;
+                  }
+                  t--;
+                }else{
+                  free(op);
+                  continue;
+                }
+              }
               insert_node_by_precedence(top, &op->expression, meta->precedence[0]);
             }else if(meta->precedence[1]){ // prefix operator
-              insert_node_by_precedence(top, &op->expression, meta->precedence[0]);
+              if(top == &terminator.expression){
+                // insert_node_by_precedence(top, &op->expression, 0);
+                AST_replace(&top->ast, &op->expression.ast);
+                AST_operator_unary* uop = dpa_u_container_of(op, AST_operator_unary, operator);
+                uop->input = top;
+                top->ast.parent = &op->expression.ast;
+              }else{
+                fprintf(stderr, "TODO: Parsing prefix operators where a value is not already expcted isn't supported yet\n");
+                // For an expression like `X ~Y`, ~Y needs to be applied to X, this can be viewed like an infix operator in between.
+                exit(99);
+              }
             }
             goto op_found;
           }
@@ -396,7 +421,7 @@ AST_expression* parse_expression(struct token** start, struct token** end){
       // return 0;
       continue;
     }
-    value->precedence = 1;
+    value->precedence = 0;
     if(top == &terminator.expression){
       AST_replace(&top->ast, &value->ast);
       top = value;

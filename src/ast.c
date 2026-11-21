@@ -1,4 +1,5 @@
 #include <ast.h>
+#include <tokenizer.h>
 #include <dpa/utils/bo.h>
 
 bool AST_IT_next(AST_IT*restrict it, bool skip_null){
@@ -56,6 +57,23 @@ void print_ast_node_member(const AST_AST* ast, int indent, const AST_M_child* ch
     } break;
     case AST_T_integer_value: {
       gmp_printf(" %Zd", ((AST_integer_value*)ast)->value);
+    } break;
+    case AST_T_incomplete_member_or_deref_cast: {
+      AST_incomplete_member_or_deref_cast* node = (AST_incomplete_member_or_deref_cast*)ast;
+      size_t n = dpa_u_list_length(&node->children);
+      struct token_string** t = dpa_u_list_data(&node->children);
+      for(size_t i=0; i<n; i++){
+        dpa_u_bo_t bo = dpa_u_to_bo(t[i]->value);
+        printf("%c%.*s", i?'.':' ', (int)bo.size, (char*)bo.data);
+      }
+    } break;
+    case AST_T_named_constant: {
+      dpa_u_bo_t bo = dpa_u_to_bo(((AST_named_constant*)ast)->name);
+      printf(" %.*s", (int)bo.size, (char*)bo.data);
+    } break;
+    case AST_T_string_value: {
+      dpa_u_bo_t bo = dpa_u_to_bo(((AST_string_value*)ast)->value);
+      printf(" `%.*s`", (int)bo.size, (char*)bo.data);
     } break;
     default: break;
   }

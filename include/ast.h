@@ -432,7 +432,7 @@ struct AST_incomplete_member_or_deref_cast {
   // of the identifiers involved.
   // The leftmost expression it applies to is expression.input, for example: "a.b.c -> a" or "f().b.c -> f()"
   AST_operator_unary operator_unary;
-  dpa_u_list(struct token*) children; // The remaining . and unresolved identifier tokens.
+  dpa_u_list(struct token_string*) children; // The remaining . and unresolved identifier tokens.
 };
 
 // Helper nodes, used when constructing the AST.
