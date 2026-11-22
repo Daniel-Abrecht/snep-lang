@@ -298,6 +298,13 @@ void insert_node_by_precedence(
 }
 
 AST_expression* parse_expression(struct token** start, struct token** end){
+  // Note: currently, we need to backtrack at most once, if an infix operator or EOF follows an infix operator
+  // We only handle that special case
+  int backtrack_i = 0;
+  struct token** backtrack_token = start;
+  AST_operator_binary* backtrack_op = 0;
+  AST_expression* backtrack_top = 0;
+  ///////
   AST_op_nothing root = {
     .operator_unary.operator.expression = {
       .ast.type = AST_T_op_nothing,
@@ -315,8 +322,21 @@ AST_expression* parse_expression(struct token** start, struct token** end){
   };
   root.operator_unary.input = &terminator.expression;
   AST_expression* top = &terminator.expression;
+  int i;
   // printf("expression\n");
-  for(struct token** t=start; t<end; t++){
+  struct token** t;
+  for(t=start; t<end; t++){
+    i = 0;
+    if(0) backtrack: {
+      i = backtrack_i;
+      t = backtrack_token;
+      top = backtrack_top;
+      AST_replace(&backtrack_op->operator.expression.ast, &backtrack_op->input[0]->ast);
+      free(backtrack_op);
+      terminator.expression.ast.parent = 0;
+      backtrack_op = 0;
+      backtrack_i = 0;
+    }
     AST_expression* value = 0;
     bool maybe_function_call = false;
     switch(t[0]->type){
@@ -358,7 +378,7 @@ AST_expression* parse_expression(struct token** start, struct token** end){
         const struct token_string*restrict ts = (struct token_string*)t[0];
         if(ts->id < opmeta_count && opmeta[ts->id].count){ // It's an operator
           const struct operator_parser_meta_list*restrict const metaops = &opmeta[ts->id];
-          for(int i=0; i<metaops->count; i++){
+          for(; i<metaops->count; i++){
             const struct operator_parser_meta*restrict const meta = &metaops->list[i];
             const AST_M_type*const ast_meta = &ast_type_meta[meta->ast_type];
             if(!AST_is(meta->ast_type, operator)){
@@ -373,6 +393,10 @@ AST_expression* parse_expression(struct token** start, struct token** end){
                 continue;
               }
               AST_operator_binary* biop = dpa_u_container_of(op, AST_operator_binary, operator);
+              backtrack_i = i + 1;
+              backtrack_op = biop;
+              backtrack_top = top;
+              backtrack_token = t;
               biop->input[1] = &terminator.expression;
               insert_node_by_precedence(top, &op->expression, meta->precedence[0]);
               top = &terminator.expression;
@@ -401,17 +425,16 @@ AST_expression* parse_expression(struct token** start, struct token** end){
                 uop->input = top;
                 top->ast.parent = &op->expression.ast;
               }else{
-                fprintf(stderr, "TODO: Parsing prefix operators where a value is not already expcted isn't supported yet\n");
-                // For an expression like `X ~Y`, ~Y needs to be applied to X, this can be viewed like an infix operator in between.
-                exit(99);
+                value = &op->expression;
               }
             }
             goto op_found;
           }
+          if(backtrack_i)
+            goto backtrack;
           fprintf(stderr, "This kind of operator can not be used here.\n");
           exit(99);
-        op_found:;
-          
+          op_found:;
         }else{ // It's a keyword
           
         }
@@ -421,7 +444,7 @@ AST_expression* parse_expression(struct token** start, struct token** end){
       // return 0;
       continue;
     }
-    value->precedence = 0;
+    backtrack_i = 0;
     if(top == &terminator.expression){
       AST_replace(&top->ast, &value->ast);
       top = value;
@@ -434,9 +457,12 @@ AST_expression* parse_expression(struct token** start, struct token** end){
     //   root.operator_unary.input = result;
     // top.expression.ast.parent = &result->ast;
   }
-  print_ast_tree(&root.operator_unary.operator.expression.ast, 0);
   // printf("-----------------\n");
   if(terminator.expression.ast.parent){
+    printf("%d\n", backtrack_i);
+    print_ast_tree(&root.operator_unary.operator.expression.ast, 0);
+    if(backtrack_i)
+      goto backtrack;
     fprintf(stderr, "top.parent is still set, operator lacks value!\n");
     return 0;
   }
