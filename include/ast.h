@@ -194,10 +194,10 @@ enum AST_node_type {
   AST_T_op_greater_than_equal = 47,
   AST_E_op_greater_than_equal = 47,
   AST_E_operator_binary = 47,
-  AST_E_operator = 47,
   AST_S_incomplete_expression_application = 48,
   AST_T_incomplete_expression_application = 48,
   AST_E_incomplete_expression_application = 48,
+  AST_E_operator = 48,
   AST_S_expr_terminator = 49,
   AST_T_expr_terminator = 49,
   AST_E_expr_terminator = 49,
@@ -421,7 +421,7 @@ struct AST_incomplete_expression_application {
   // For "type type (value)", we have cast(type,cast(type,value))
   // but for "function (function) (value)", we have call(call(function),value)
   // This can only be resolved after the type category of the resulting values is known
-  AST_expression expression;
+  AST_operator operator;
   dpa_u_list(AST_expression*) children;
 };
 
@@ -495,7 +495,7 @@ static_assert(offsetof(AST_op_less_than, operator_binary) == 0, "AST_op_less_tha
 static_assert(offsetof(AST_op_less_than_equal, operator_binary) == 0, "AST_op_less_than_equal::operator_binary must be the first member!");
 static_assert(offsetof(AST_op_greater_than, operator_binary) == 0, "AST_op_greater_than::operator_binary must be the first member!");
 static_assert(offsetof(AST_op_greater_than_equal, operator_binary) == 0, "AST_op_greater_than_equal::operator_binary must be the first member!");
-static_assert(offsetof(AST_incomplete_expression_application, expression) == 0, "AST_incomplete_expression_application::expression must be the first member!");
+static_assert(offsetof(AST_incomplete_expression_application, operator) == 0, "AST_incomplete_expression_application::operator must be the first member!");
 static_assert(offsetof(AST_incomplete_member_or_deref_cast, operator_unary) == 0, "AST_incomplete_member_or_deref_cast::operator_unary must be the first member!");
 static_assert(offsetof(AST_expr_terminator, expression) == 0, "AST_expr_terminator::expression must be the first member!");
 static_assert(offsetof(AST_op_nothing, operator_unary) == 0, "AST_op_nothing::operator_unary must be the first member!");

@@ -36,7 +36,7 @@ interfaces.
 |          |   `:` | infix | range | unsigned integer, unsigned integer |
 |          |   `@` | suffix | Metaobject access | value or type |
 |          |   `#` | suffix | Constraint access | value |
-|          |   `$` | suffix | Copy (results in a pointer to an object) | value |
+|          |   `&` | suffix | Copy (results in a pointer to an object) | value |
 |          |   `.` | suffix | Dereference | pointer |
 |          |   `.` | suffix | Remove indirection | type |
 |          |   `.` | infix | Member access | struct value or pointer to struct value or pointer to array of struct values, member field identifier |
@@ -177,15 +177,15 @@ the new value.
 
 A small example:
 ```snep
-local i = 0$;
+local i = 0&;
 i = i. + 1;
 ```
 
-Here, the `$` creates a copy of the value `0`, the result is a pointer to a mutable object containing the value 0.
+Here, the `&` creates a copy of the value `0`, the result is a pointer to a mutable object containing the value 0.
 The constant `i` is defined to be that pointer value. `i.` takes the value `i` points to, it dereferences the pointer.
 The `+ 1` adds 1 to that, 0 + 1 will be 1, that's the result of the expression. It then is assigned to the object `i` points to.
 
-You can also do things like `0$ = 1`, `0$` is a pointer to a mutable object after all, so a value can be assigned to it.
+You can also do things like `0& = 1`, `0&` is a pointer to a mutable object after all, so a value can be assigned to it.
 Not that that's particularly useful to do, though.
 
 Where the object is allocated depends on the current context. Usually, it defaults to being a global object,
@@ -221,9 +221,9 @@ number_list_type = {
   value = ? as int;
   next = ? as number_list_type rw';
 };
-number_list = {1,{2,{3}$}$}$$ as number_list_type rw'rw';
+number_list = {1,{2,{3}&}&}&& as number_list_type rw'rw';
 number_list_remove = (boolean <= {list = ? as number_list_type rw'rw'; value = ? as int;}) {
-  for(local it=list$; local entry = it..; it=entry.next$){
+  for(local it=list&; local entry = it..; it=entry.next&){
     if(entry.value. == value){
       it. = entry.next.;
       return true;
@@ -354,7 +354,7 @@ Every object has a type. Let's first consider the types of constants that can be
 |---------|------|-------------------------|
 | 123     | `snep.type.int { signed=1, bits=8, exponent=0 }` | `i8` (for this example constant only) |
 | \`Hello World!\` | `snep.type.array { type=u8, length=12 }` | `u8[12]` |
-| {1,"b"} | `snep.type.struct { fields={ snep.type.int {signed=1, bits=2}, u8[1]@ }$ }` |  |
+| {1,"b"} | `snep.type.struct { fields={ snep.type.int {signed=1, bits=2}, u8[1]@ }& }` |  |
 
 Note: a type meta object is an object created from a builtin meta type. For example, `snep.type.struct` is the meta type
 of the struct meta type object. For the most part, meta type objects can be used like regular objects, and meta types can be
@@ -459,7 +459,7 @@ Example:
 ```
 a = routine <{
   stack <{
-    local myvar = string_rw { "Hello World"$ };
+    local myvar = string_rw { "Hello World"& };
     puts(myvar);
     // yield is not allowed in here
   };
@@ -662,7 +662,7 @@ expressions.
 
 You can have multiple Symbols for the same object. Expressions like the following are also allowed:
 ```
-global x = { a=1; b=2; }$;
+global x = { a=1; b=2; }&;
 global y = x.b;
 ```
 As per the usual member operator rules, `x.b` results in a pointer to the member `b` in `x`, so `y` will be a

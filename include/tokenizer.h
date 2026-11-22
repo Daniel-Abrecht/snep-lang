@@ -49,7 +49,6 @@ struct token_integer {
   X(("**"), POWER) \
   X(("/%"), DIVMOD) \
   X(("@"), META) \
-  X(("$"), COPY) \
   X(("'"), PTR) \
   X(("&"), AND) \
   X(("|"), OR) \

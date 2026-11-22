@@ -60,10 +60,10 @@ struct operator_parser_meta_list {
 
 
 const struct operator_parser_meta_list opmeta[] = {
-  [TOKEN_OP_PTR] = { // $
+  [TOKEN_OP_PTR] = { // '
     .count = 1,
     .list = (const struct operator_parser_meta[]){
-      {{0x0100,0x0000}, AST_T_op_ref}, // a$
+      {{0x0100,0x0000}, AST_T_op_ref}, // a'
     },
   },
   [TOKEN_OP_META] = { // @
@@ -72,16 +72,13 @@ const struct operator_parser_meta_list opmeta[] = {
       {{0x0100,0x0000}, AST_T_op_meta},
     },
   },
-  [TOKEN_OP_COPY] = { // $
-    .count = 1,
-    .list = (const struct operator_parser_meta[]){
-      {{0x0100,0x0000}, AST_T_op_copy}, // a$
-    },
-  },
   [TOKEN_OP_AND] = { // &
-    .count = 1,
+    .count = 2,
     .list = (const struct operator_parser_meta[]){
       {{0x0C00,0x0C00}, AST_T_op_binary_and}, // a & b
+      // Note: `&` results in a pointer value, no value can be applied to a pointer value, so `a & b` is never a suffix operator.
+      // The reason `'` and `*` are different operators is because if `*` was reused, then `a * b` could either mean cast b to a*, or multiply a and b.
+      {{0x0100,0x0000}, AST_T_op_copy}, // a&
     },
   },
   [TOKEN_OP_DOT] = { // .
@@ -231,9 +228,10 @@ const struct operator_parser_meta_list opmeta[] = {
     },
   },
   [TOKEN_OP_LOGIC_AND] = { // &&
-    .count = 1,
+    .count = 2,
     .list = (const struct operator_parser_meta[]){
       {{0x1100,0x1100}, AST_T_op_logic_and}, // a && b
+      {{0x0100,0x0000}, AST_T_op_copy}, // a&
     },
   },
   [TOKEN_OP_LOGIC_OR] = { // ||
@@ -263,6 +261,30 @@ bool AST_replace(AST_AST* old_child, AST_AST* new_child){
   old_child->parent = 0;
   return true;
 }
+
+
+AST_expression* find_node_to_insert_above_by_precedence(
+  AST_expression* top,
+  int left_precedence
+){
+  if(top) while(top->ast.parent){
+    AST_expression* parent;
+    {
+      AST_AST* n = top->ast.parent;
+      if(!AST_is(n->type, expression)){
+        fprintf(stderr, "node is not an expression\n");
+        exit(99);
+      }
+      parent = dpa_u_container_of(n, AST_expression, ast);
+    }
+    if( (top->precedence == left_precedence && !(top->precedence & 1)) // Same precedence, and left to right
+      || parent->precedence > left_precedence
+    ) return top;
+    top = parent;
+  }
+  return 0;
+}
+
 
 void insert_node_by_precedence(
   AST_expression* top,
@@ -390,7 +412,7 @@ AST_expression* parse_expression(struct token** start, struct token** end){
           const struct operator_parser_meta_list*restrict const metaops = &opmeta[ts->id];
           for(; i<metaops->count; i++){
             const struct operator_parser_meta*restrict const meta = &metaops->list[i];
-            const AST_M_type*const ast_meta = &ast_type_meta[meta->ast_type];
+            // const AST_M_type*const ast_meta = &ast_type_meta[meta->ast_type];
             if(!AST_is(meta->ast_type, operator)){
               fprintf(stderr, "BUG: Expected AST node type to be an AST_operator!\n");
               exit(99);
@@ -412,6 +434,10 @@ AST_expression* parse_expression(struct token** start, struct token** end){
               top = &terminator.expression;
               top->ast.parent = &op->expression.ast;
             }else if(meta->precedence[0]){ // suffix operator
+              if(top == &terminator.expression){
+                free(op);
+                continue;
+              }
               if(AST_is(op->expression.ast.type, incomplete_member_or_deref_cast)){
                 if(t<end-1 && t[1]->type == TOKEN_IDENTIFIER){
                   for(; t<end-1; t+=2){
@@ -427,16 +453,27 @@ AST_expression* parse_expression(struct token** start, struct token** end){
                 }
               }
               insert_node_by_precedence(top, &op->expression, meta->precedence[0]);
+              if(ts->id == TOKEN_OP_LOGIC_AND){ // x&& -> x& &
+                AST_operator_unary* op2 = AST_new_g(meta->ast_type, 0);
+                AST_replace(&op->expression.ast, &op2->operator.expression.ast);
+                op2->input = &op->expression;
+                op->expression.ast.parent = &op2->operator.expression.ast;
+                op = &op2->operator;
+              }
             }else if(meta->precedence[1]){ // prefix operator
+              AST_operator_unary* uop = dpa_u_container_of(op, AST_operator_unary, operator);
               if(top == &terminator.expression){
                 // insert_node_by_precedence(top, &op->expression, 0);
                 AST_replace(&top->ast, &op->expression.ast);
-                AST_operator_unary* uop = dpa_u_container_of(op, AST_operator_unary, operator);
-                uop->input = top;
-                top->ast.parent = &op->expression.ast;
               }else{
                 value = &op->expression;
+                if(terminator.expression.ast.parent){
+                  fprintf(stderr, "BUG\n");
+                  exit(99);
+                }
               }
+              uop->input = &terminator.expression;
+              terminator.expression.ast.parent = &op->expression.ast;
             }
             goto op_found;
           }
@@ -450,27 +487,38 @@ AST_expression* parse_expression(struct token** start, struct token** end){
         }
       }; break;
     }
-    if(!value){
-      // return 0;
+    if(!value)
       continue;
-    }
     backtrack_i = 0;
     if(top == &terminator.expression){
       AST_replace(&top->ast, &value->ast);
       top = value;
     }else{
       // expr expr, first expr likely to be a type or function
-      
+      AST_incomplete_expression_application* expr;
+      {
+        AST_expression* left_child = find_node_to_insert_above_by_precedence(top, 0x0200);
+        if(AST_is(left_child->ast.type, incomplete_expression_application)){
+          expr = dpa_u_container_of(left_child, AST_incomplete_expression_application, operator.expression);
+        }else{
+          expr = AST_new(incomplete_expression_application, 0);
+          AST_replace(&left_child->ast, &expr->operator.expression.ast);
+          dpa_u_list_append(&expr->children, 1, &left_child);
+          left_child->ast.parent = &expr->operator.expression.ast;
+        }
+      }
+      expr->operator.expression.precedence = 0x0200;
+      dpa_u_list_append(&expr->children, 1, &value);
+      value->ast.parent = &expr->operator.expression.ast;
+      if(terminator.expression.ast.parent){
+        top = &terminator.expression;
+      }else{
+        top = value;
+      }
     }
-    // result->ast.parent = top.expression.ast.parent;
-    // if(!root.operator_unary.input)
-    //   root.operator_unary.input = result;
-    // top.expression.ast.parent = &result->ast;
   }
   // printf("-----------------\n");
   if(terminator.expression.ast.parent){
-    printf("%d\n", backtrack_i);
-    print_ast_tree(&root.operator_unary.operator.expression.ast, 0);
     if(backtrack_i)
       goto backtrack;
     fprintf(stderr, "top.parent is still set, operator lacks value!\n");

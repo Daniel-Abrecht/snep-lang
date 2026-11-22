@@ -190,7 +190,7 @@ struct AST_incomplete_expression_application {
   // For "type type (value)", we have cast(type,cast(type,value))
   // but for "function (function) (value)", we have call(call(function),value)
   // This can only be resolved after the type category of the resulting values is known
-  AST_expression expression;
+  AST_operator operator;
   dpa_u_list(AST_expression*) children;
 };
 

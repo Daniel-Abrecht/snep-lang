@@ -321,6 +321,8 @@ bool lex(FILE* f, struct lexer* result){
             int size = dpa_u_bo_get_size(op);
             const char* data = dpa_u_bo_get_data(op);
             if(size <= max_len && !memcmp(cit, data, size)){
+              if(i == TOKEN_OP_LOGIC_AND && 3 <= max_len && cit[2] == '&')
+                continue; // &&& -> & && (instead of && &)
               state = LEX_OPERATOR;
               current_token = calloc(1, sizeof(struct token_string));
               current_token->type = TOKEN_OPERATOR;
