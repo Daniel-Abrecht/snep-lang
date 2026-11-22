@@ -60,11 +60,10 @@ struct operator_parser_meta_list {
 
 
 const struct operator_parser_meta_list opmeta[] = {
-  [TOKEN_OP_MUL] = { // *
-    .count = 2,
+  [TOKEN_OP_PTR] = { // $
+    .count = 1,
     .list = (const struct operator_parser_meta[]){
-      {{0x0900,0x0900}, AST_T_op_multiply}, // a * b
-      {{0x0100,0x0000}, AST_T_op_ref}, // type*
+      {{0x0100,0x0000}, AST_T_op_ref}, // a$
     },
   },
   [TOKEN_OP_META] = { // @
@@ -73,11 +72,16 @@ const struct operator_parser_meta_list opmeta[] = {
       {{0x0100,0x0000}, AST_T_op_meta},
     },
   },
+  [TOKEN_OP_COPY] = { // $
+    .count = 1,
+    .list = (const struct operator_parser_meta[]){
+      {{0x0100,0x0000}, AST_T_op_copy}, // a$
+    },
+  },
   [TOKEN_OP_AND] = { // &
-    .count = 2,
+    .count = 1,
     .list = (const struct operator_parser_meta[]){
       {{0x0C00,0x0C00}, AST_T_op_binary_and}, // a & b
-      {{0x0100,0x0000}, AST_T_op_copy      }, // a&
     },
   },
   [TOKEN_OP_DOT] = { // .
@@ -140,6 +144,12 @@ const struct operator_parser_meta_list opmeta[] = {
     .count = 1,
     .list = (const struct operator_parser_meta[]){
       {{0x0B00,0x0800}, AST_T_op_bitshift_right}, // a >> b
+    },
+  },
+  [TOKEN_OP_MUL] = { // *
+    .count = 1,
+    .list = (const struct operator_parser_meta[]){
+      {{0x0900,0x0900}, AST_T_op_multiply}, // a * b
     },
   },
   [TOKEN_OP_DIV] = { // /
