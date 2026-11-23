@@ -375,12 +375,27 @@ AST_expression* parse_expression(struct token** start, struct token** end){
       case TOKEN_BLOCK: {
         struct token_block* b = (struct token_block*)t[0];
         switch(b->block_type){
-          case TOKEN_BLOCK_PARENTHESIS: {
+          case TOKEN_BLOCK_PARENTHESIS: { // ()
             struct token** tokens = dpa_u_list_data(&b->token_list);
             size_t size = dpa_u_list_length(&b->token_list);
             value = parse_expression(tokens, tokens+size);
             maybe_function_call = true;
           } break;
+          case TOKEN_BLOCK_BRACKET: { // []
+            // TODO: handle empty contents, used in array types of unknown size
+            if(top == &terminator.expression){
+              // TODO: consider backtracking here
+              fprintf(stderr, "[] isn't valid here\n");
+              exit(99);
+            }
+            struct token** tokens = dpa_u_list_data(&b->token_list);
+            size_t size = dpa_u_list_length(&b->token_list);
+            AST_op_subscript* sop = AST_new(op_subscript, 0);
+            AST_expression* expr = parse_expression(tokens, tokens+size);
+            insert_node_by_precedence(top, &sop->operator_binary.operator.expression, 0x0100);
+            sop->operator_binary.input[1] = expr;
+            expr->ast.parent = &sop->operator_binary.operator.expression.ast;
+          }; break;
         }
       }; break;
       case TOKEN_SPACE:
