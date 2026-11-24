@@ -384,7 +384,8 @@ AST_expression* parse_expression(struct token** start, struct token** end){
           case TOKEN_BLOCK_BRACKET: { // []
             // TODO: handle empty contents, used in array types of unknown size
             if(top == &terminator.expression){
-              // TODO: consider backtracking here
+              if(backtrack_i)
+                goto backtrack;
               fprintf(stderr, "[] isn't valid here\n");
               exit(99);
             }
